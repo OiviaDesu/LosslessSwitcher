@@ -30,7 +30,6 @@ class OutputDevices: ObservableObject {
     
     // Performance-related constants
     private let kStandardSampleRate: Float64 = 48000 // Standard sample rate that may need retry
-    private let kConsoleLogCapacity = 100 // Expected capacity for console log arrays
     
     private var previousSampleRate: Float64?
     var trackAndSample = [MediaTrack : Float64]()
@@ -168,7 +167,10 @@ class OutputDevices: ObservableObject {
                 return
             }
             
-            // Only retry for standard sample rate if not already in recursion to avoid excessive delays
+            // Special handling for 48000 Hz sample rate:
+            // This is the standard digital audio sample rate, and detection may initially report this
+            // as a fallback before the actual track sample rate is available in the logs.
+            // We retry once to get the true sample rate. Only do this on first call to avoid infinite loops.
             if sampleRate == kStandardSampleRate && !recursion {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                     self.switchLatestSampleRate(recursion: true)
