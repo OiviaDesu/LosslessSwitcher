@@ -75,8 +75,10 @@ class CMPlayerParser {
         var stats = [CMPlayerStats]()
         
         // Pre-filter for relevant messages to avoid repeated checks
-        let relevantEntries = entries.filter { 
-            $0.message.contains("ACAppleLosslessDecoder") && $0.message.contains("Input format: ")
+        // Using a single filter with compound condition for better performance
+        let relevantEntries = entries.filter { message in
+            let msg = message.message
+            return msg.contains("ACAppleLosslessDecoder") && msg.contains("Input format: ")
         }
         
         for entry in relevantEntries {

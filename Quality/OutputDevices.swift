@@ -138,7 +138,7 @@ class OutputDevices: ObservableObject {
                 allStats.append(contentsOf: CMPlayerParser.parseCoreMediaConsoleLogs(coreMediaLogs))
             }
 
-            // Use sorted() instead of sort() for better clarity, and optimize with KeyPath if available
+            // Sort by priority in descending order
             allStats = allStats.sorted(by: { $0.priority > $1.priority })
             print("[getAllStats] \(allStats)")
         }
@@ -153,7 +153,9 @@ class OutputDevices: ObservableObject {
         let allStats = self.getAllStats()
         let defaultDevice = self.selectedOutputDevice ?? self.defaultOutputDevice
         
-        if let first = allStats.first, let supported = defaultDevice?.nominalSampleRates {
+        guard let device = defaultDevice else { return }
+        
+        if let first = allStats.first, let supported = device.nominalSampleRates {
             let sampleRate = Float64(first.sampleRate)
             let bitDepth = Int32(first.bitDepth)
             
@@ -170,7 +172,7 @@ class OutputDevices: ObservableObject {
                 return
             }
             
-            guard let formats = self.getFormats(bestStat: first, device: defaultDevice!) else { return }
+            guard let formats = self.getFormats(bestStat: first, device: device) else { return }
             
             // https://stackoverflow.com/a/65060134
             let nearest = supported.min(by: {
@@ -189,10 +191,10 @@ class OutputDevices: ObservableObject {
             
             if let suitableFormat = nearestFormat.first {
                 if enableBitDepthDetection {
-                    self.setFormats(device: defaultDevice, format: suitableFormat)
+                    self.setFormats(device: device, format: suitableFormat)
                 }
                 else if suitableFormat.mSampleRate != previousSampleRate { // bit depth disabled
-                    defaultDevice?.setNominalSampleRate(suitableFormat.mSampleRate)
+                    device.setNominalSampleRate(suitableFormat.mSampleRate)
                 }
                 self.updateSampleRate(suitableFormat.mSampleRate)
                 if let currentTrack = currentTrack {
