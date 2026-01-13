@@ -131,14 +131,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         self.devicesMenu.addItem(autoItem)
         autoItem.tag = -1
         let selectedUID = Defaults.shared.selectedDeviceUID
-        if selectedUID == nil || (selectedUID != nil && !self.doesDeviceUID(selectedUID, existsIn: outputDevices.outputDevices)) {
+        if selectedUID == nil || !self.doesDeviceUID(selectedUID, existsIn: outputDevices.outputDevices) {
             autoItem.state = .on
         }
         outputDevices.selectedOutputDevice = nil
         
-        var idx = 0
-        for device in outputDevices.outputDevices {
-
+        for (idx, device) in outputDevices.outputDevices.enumerated() {
             let uid = device.uid
             let name = device.name
             let item = DeviceMenuItem(title: name, action: #selector(deviceSelection(_:)), keyEquivalent: "", device: device)
@@ -150,7 +148,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             else {
                 item.state = .off
             }
-            idx += 1
             self.devicesMenu.addItem(item)
         }
     }

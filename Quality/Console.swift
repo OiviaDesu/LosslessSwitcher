@@ -30,6 +30,10 @@ class Console {
         let store = try OSLogStore.local()
         let duration = store.position(timeIntervalSinceEnd: -3.0)
         let entries = try store.getEntries(with: [], at: duration, matching: type.predicate)
+        
+        // Reserve capacity for better performance
+        messages.reserveCapacity(100)
+        
         // for some reason AnySequence to Array turns it into a empty array?
         for entry in entries {
             let consoleMessage = SimpleConsole(date: entry.date, message: entry.composedMessage)

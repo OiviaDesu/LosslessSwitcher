@@ -231,6 +231,9 @@ class OutputDevices: ObservableObject {
     }
     
     func updateSampleRate(_ sampleRate: Float64) {
+        // Early return if sample rate hasn't changed to avoid unnecessary UI updates
+        guard sampleRate != self.previousSampleRate else { return }
+        
         self.previousSampleRate = sampleRate
         DispatchQueue.main.async {
             let readableSampleRate = sampleRate / 1000
