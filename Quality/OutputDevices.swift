@@ -73,11 +73,13 @@ class OutputDevices: ObservableObject {
     
     func renewTimer() {
         if timerCancellable != nil { return }
+        // Reduced polling interval from 2s to 1.5s for better responsiveness
+        // Limited to 3 attempts (4.5s total) instead of 5 attempts (10s total) to reduce battery drain
         timerCancellable = Timer
-            .publish(every: 2, on: .main, in: .default)
+            .publish(every: 1.5, on: .main, in: .default)
             .autoconnect()
             .sink { _ in
-                if self.timerCalls == 5 {
+                if self.timerCalls >= 3 {
                     self.timerCalls = 0
                     self.timerCancellable?.cancel()
                     self.timerCancellable = nil
@@ -136,7 +138,8 @@ class OutputDevices: ObservableObject {
                 allStats.append(contentsOf: CMPlayerParser.parseCoreMediaConsoleLogs(coreMediaLogs))
             }
 
-            allStats.sort(by: {$0.priority > $1.priority})
+            // Use sorted() instead of sort() for better clarity, and optimize with KeyPath if available
+            allStats = allStats.sorted(by: { $0.priority > $1.priority })
             print("[getAllStats] \(allStats)")
         }
         catch {
@@ -159,13 +162,15 @@ class OutputDevices: ObservableObject {
                 return
             }
             
-            if sampleRate == 48000 {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            // Only retry for 48000 Hz if not already in recursion to avoid excessive delays
+            if sampleRate == 48000 && !recursion {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                     self.switchLatestSampleRate(recursion: true)
                 }
+                return
             }
             
-            let formats = self.getFormats(bestStat: first, device: defaultDevice!)!
+            guard let formats = self.getFormats(bestStat: first, device: defaultDevice!) else { return }
             
             // https://stackoverflow.com/a/65060134
             let nearest = supported.min(by: {
@@ -194,36 +199,18 @@ class OutputDevices: ObservableObject {
                     self.trackAndSample[currentTrack] = suitableFormat.mSampleRate
                 }
             }
-
-//            if let nearest = nearest {
-//                let nearestSampleRate = nearest.element
-//                if nearestSampleRate != previousSampleRate {
-//                    defaultDevice?.setNominalSampleRate(nearestSampleRate)
-//                    self.updateSampleRate(nearestSampleRate)
-//                    if let currentTrack = currentTrack {
-//                        self.trackAndSample[currentTrack] = nearestSampleRate
-//                    }
-//                }
-//            }
         }
         else if !recursion {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            // Reduced delay from 1s to 0.8s for faster retry
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                 self.switchLatestSampleRate(recursion: true)
             }
         }
         else {
-//                print("cache \(self.trackAndSample)")
             if self.currentTrack == self.previousTrack {
                 print("same track, ignore cache")
                 return
             }
-//            if let currentTrack = currentTrack, let cachedSampleRate = trackAndSample[currentTrack] {
-//                print("using cached data")
-//                if cachedSampleRate != previousSampleRate {
-//                    defaultDevice?.setNominalSampleRate(cachedSampleRate)
-//                    self.updateSampleRate(cachedSampleRate)
-//                }
-//            }
         }
 
     }

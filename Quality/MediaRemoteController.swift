@@ -20,14 +20,16 @@ class MediaRemoteController {
     
     init(outputDevices: OutputDevices) {
         infoChangedCancellable = NotificationCenter.default.publisher(for: NSNotification.Name.mrMediaRemoteNowPlayingInfoDidChange)
-                .throttle(for: .seconds(1), scheduler: DispatchQueue.main, latest: true)
+                // Reduced throttle from 1s to 0.5s for better responsiveness while still avoiding excessive updates
+                .throttle(for: .seconds(0.5), scheduler: DispatchQueue.main, latest: true)
                 .sink(receiveValue: { notification in
                         //print(notification)
                     print("Info Changed Notification Received")
                     MRMediaRemoteGetNowPlayingInfo(.main) { info in
                         if let info = info as? [String : Any] {
                             let currentTrack = MediaTrack(mediaRemote: info)
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                            // Reduced delay from 1s to 0.8s for faster switching response
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                                 print("Current Track \(outputDevices.currentTrack?.title ?? "nil"), previous: \(outputDevices.previousTrack?.title ?? "nil"), isSame: \(outputDevices.previousTrack == outputDevices.currentTrack)")
                                 outputDevices.previousTrack = outputDevices.currentTrack
                                 outputDevices.currentTrack = currentTrack

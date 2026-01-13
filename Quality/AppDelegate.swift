@@ -156,7 +156,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     private func doesDeviceUID(_ uid: String?, existsIn outputDevices: [AudioDevice]) -> Bool {
-        return !outputDevices.filter({$0.uid == uid}).isEmpty
+        guard let uid = uid else { return false }
+        return outputDevices.contains(where: { $0.uid == uid })
     }
     
     @objc func deviceSelection(_ sender: DeviceMenuItem) {
