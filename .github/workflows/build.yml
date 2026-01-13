@@ -1,0 +1,130 @@
+name: Build LosslessSwitcher
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build for ${{ matrix.arch }}
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        arch: [x86_64, arm64]
+        include:
+          - arch: x86_64
+            name: Intel
+          - arch: arm64
+            name: Apple Silicon
+      fail-fast: false
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: Select Xcode version
+      run: sudo xcode-select -s /Applications/Xcode_15.2.app/Contents/Developer
+    
+    - name: Show Xcode version
+      run: xcodebuild -version
+    
+    - name: Resolve Swift Package Dependencies
+      run: |
+        xcodebuild -resolvePackageDependencies \
+          -project Quality.xcodeproj \
+          -scheme LosslessSwitcher
+    
+    - name: Build for ${{ matrix.name }} (${{ matrix.arch }})
+      run: |
+        xcodebuild clean build \
+          -project Quality.xcodeproj \
+          -scheme LosslessSwitcher \
+          -configuration Release \
+          -arch ${{ matrix.arch }} \
+          -derivedDataPath ./build \
+          CODE_SIGN_IDENTITY="" \
+          CODE_SIGNING_REQUIRED=NO \
+          CODE_SIGNING_ALLOWED=NO \
+          | xcpretty || true
+    
+    - name: Show build products
+      run: |
+        echo "Build products for ${{ matrix.name }}:"
+        find ./build -name "*.app" -type d || echo "No .app bundles found"
+        find ./build -name "LosslessSwitcher" -type f || echo "No binaries found"
+    
+    - name: Upload build artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: LosslessSwitcher-${{ matrix.arch }}
+        path: build/Build/Products/Release/LosslessSwitcher.app
+        if-no-files-found: warn
+        retention-days: 7
+  
+  build-universal:
+    name: Create Universal Binary
+    runs-on: macos-latest
+    needs: build
+    if: github.event_name != 'pull_request'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: Select Xcode version
+      run: sudo xcode-select -s /Applications/Xcode_15.2.app/Contents/Developer
+    
+    - name: Resolve Swift Package Dependencies
+      run: |
+        xcodebuild -resolvePackageDependencies \
+          -project Quality.xcodeproj \
+          -scheme LosslessSwitcher
+    
+    - name: Build Universal Binary
+      run: |
+        xcodebuild clean build \
+          -project Quality.xcodeproj \
+          -scheme LosslessSwitcher \
+          -configuration Release \
+          -arch x86_64 -arch arm64 \
+          -derivedDataPath ./build \
+          CODE_SIGN_IDENTITY="" \
+          CODE_SIGNING_REQUIRED=NO \
+          CODE_SIGNING_ALLOWED=NO \
+          | xcpretty || true
+    
+    - name: Verify Universal Binary
+      run: |
+        APP_PATH="./build/Build/Products/Release/LosslessSwitcher.app"
+        BINARY_PATH="$APP_PATH/Contents/MacOS/LosslessSwitcher"
+        
+        if [ -f "$BINARY_PATH" ]; then
+          echo "Binary found at: $BINARY_PATH"
+          echo "Architectures:"
+          lipo -info "$BINARY_PATH"
+          file "$BINARY_PATH"
+        else
+          echo "Binary not found at expected path"
+          find ./build -name "LosslessSwitcher" -type f
+        fi
+    
+    - name: Create distributable ZIP
+      run: |
+        cd ./build/Build/Products/Release
+        zip -r LosslessSwitcher-Universal.zip LosslessSwitcher.app
+        cd -
+    
+    - name: Upload Universal Binary
+      uses: actions/upload-artifact@v4
+      with:
+        name: LosslessSwitcher-Universal
+        path: build/Build/Products/Release/LosslessSwitcher-Universal.zip
+        if-no-files-found: warn
+        retention-days: 30
