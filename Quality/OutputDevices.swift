@@ -30,6 +30,7 @@ class OutputDevices: ObservableObject {
     
     // Performance-related constants
     private let kStandardSampleRate: Float64 = 48000 // Standard sample rate that may need retry
+    private let kMaxTimerAttempts = 3 // Maximum polling attempts before stopping timer
     
     private var previousSampleRate: Float64?
     var trackAndSample = [MediaTrack : Float64]()
@@ -82,7 +83,7 @@ class OutputDevices: ObservableObject {
             .publish(every: 1.5, on: .main, in: .default)
             .autoconnect()
             .sink { _ in
-                if self.timerCalls >= 3 {
+                if self.timerCalls >= self.kMaxTimerAttempts {
                     self.timerCalls = 0
                     self.timerCancellable?.cancel()
                     self.timerCancellable = nil

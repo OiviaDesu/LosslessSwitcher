@@ -131,7 +131,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         self.devicesMenu.addItem(autoItem)
         autoItem.tag = -1
         let selectedUID = Defaults.shared.selectedDeviceUID
-        if selectedUID == nil || !self.doesDeviceUID(selectedUID, existsIn: outputDevices.outputDevices) {
+        // doesDeviceUID returns false for nil, so we can simplify the condition
+        if !self.doesDeviceUID(selectedUID, existsIn: outputDevices.outputDevices) {
             autoItem.state = .on
         }
         outputDevices.selectedOutputDevice = nil
