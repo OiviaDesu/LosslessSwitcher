@@ -28,6 +28,10 @@ class OutputDevices: ObservableObject {
     
     private var consoleQueue = DispatchQueue(label: "consoleQueue", qos: .userInteractive)
     
+    // Performance-related constants
+    private let kStandardSampleRate: Float64 = 48000 // Standard sample rate that may need retry
+    private let kConsoleLogCapacity = 100 // Expected capacity for console log arrays
+    
     private var previousSampleRate: Float64?
     var trackAndSample = [MediaTrack : Float64]()
     var previousTrack: MediaTrack?
@@ -138,8 +142,8 @@ class OutputDevices: ObservableObject {
                 allStats.append(contentsOf: CMPlayerParser.parseCoreMediaConsoleLogs(coreMediaLogs))
             }
 
-            // Sort by priority in descending order
-            allStats = allStats.sorted(by: { $0.priority > $1.priority })
+            // Sort by priority in descending order (in-place for better memory efficiency)
+            allStats.sort(by: { $0.priority > $1.priority })
             print("[getAllStats] \(allStats)")
         }
         catch {
@@ -164,8 +168,8 @@ class OutputDevices: ObservableObject {
                 return
             }
             
-            // Only retry for 48000 Hz if not already in recursion to avoid excessive delays
-            if sampleRate == 48000 && !recursion {
+            // Only retry for standard sample rate if not already in recursion to avoid excessive delays
+            if sampleRate == kStandardSampleRate && !recursion {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                     self.switchLatestSampleRate(recursion: true)
                 }
