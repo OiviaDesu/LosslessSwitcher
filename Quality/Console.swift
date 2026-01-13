@@ -25,11 +25,17 @@ enum EntryType: String {
 }
 
 class Console {
+    private static let kExpectedLogCapacity = 100
+    
     static func getRecentEntries(type: EntryType) throws -> [SimpleConsole] {
         var messages = [SimpleConsole]()
         let store = try OSLogStore.local()
         let duration = store.position(timeIntervalSinceEnd: -3.0)
         let entries = try store.getEntries(with: [], at: duration, matching: type.predicate)
+        
+        // Reserve capacity for better performance
+        messages.reserveCapacity(kExpectedLogCapacity)
+        
         // for some reason AnySequence to Array turns it into a empty array?
         for entry in entries {
             let consoleMessage = SimpleConsole(date: entry.date, message: entry.composedMessage)

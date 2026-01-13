@@ -131,14 +131,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         self.devicesMenu.addItem(autoItem)
         autoItem.tag = -1
         let selectedUID = Defaults.shared.selectedDeviceUID
-        if selectedUID == nil || (selectedUID != nil && !self.doesDeviceUID(selectedUID, existsIn: outputDevices.outputDevices)) {
+        // doesDeviceUID returns false for nil, so we can simplify the condition
+        if !self.doesDeviceUID(selectedUID, existsIn: outputDevices.outputDevices) {
             autoItem.state = .on
         }
         outputDevices.selectedOutputDevice = nil
         
-        var idx = 0
-        for device in outputDevices.outputDevices {
-
+        for (idx, device) in outputDevices.outputDevices.enumerated() {
             let uid = device.uid
             let name = device.name
             let item = DeviceMenuItem(title: name, action: #selector(deviceSelection(_:)), keyEquivalent: "", device: device)
@@ -150,13 +149,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             else {
                 item.state = .off
             }
-            idx += 1
             self.devicesMenu.addItem(item)
         }
     }
     
     private func doesDeviceUID(_ uid: String?, existsIn outputDevices: [AudioDevice]) -> Bool {
-        return !outputDevices.filter({$0.uid == uid}).isEmpty
+        guard let uid = uid else { return false }
+        return outputDevices.contains(where: { $0.uid == uid })
     }
     
     @objc func deviceSelection(_ sender: DeviceMenuItem) {

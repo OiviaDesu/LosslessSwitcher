@@ -28,6 +28,10 @@ class OutputDevices: ObservableObject {
     
     private var consoleQueue = DispatchQueue(label: "consoleQueue", qos: .userInteractive)
     
+    // Performance-related constants
+    private let kStandardSampleRate: Float64 = 48000 // Standard sample rate that may need retry
+    private let kMaxTimerAttempts = 3 // Maximum polling attempts before stopping timer
+    
     private var previousSampleRate: Float64?
     var trackAndSample = [MediaTrack : Float64]()
     var previousTrack: MediaTrack?
@@ -73,11 +77,13 @@ class OutputDevices: ObservableObject {
     
     func renewTimer() {
         if timerCancellable != nil { return }
+        // Reduced polling interval from 2s to 1.5s for better responsiveness
+        // Limited to 3 attempts (4.5s total) instead of 5 attempts (10s total) to reduce battery drain
         timerCancellable = Timer
-            .publish(every: 2, on: .main, in: .default)
+            .publish(every: 1.5, on: .main, in: .default)
             .autoconnect()
             .sink { _ in
-                if self.timerCalls == 5 {
+                if self.timerCalls >= self.kMaxTimerAttempts {
                     self.timerCalls = 0
                     self.timerCancellable?.cancel()
                     self.timerCancellable = nil
@@ -136,7 +142,8 @@ class OutputDevices: ObservableObject {
                 allStats.append(contentsOf: CMPlayerParser.parseCoreMediaConsoleLogs(coreMediaLogs))
             }
 
-            allStats.sort(by: {$0.priority > $1.priority})
+            // Sort by priority in descending order (in-place for better memory efficiency)
+            allStats.sort(by: { $0.priority > $1.priority })
             print("[getAllStats] \(allStats)")
         }
         catch {
@@ -150,7 +157,9 @@ class OutputDevices: ObservableObject {
         let allStats = self.getAllStats()
         let defaultDevice = self.selectedOutputDevice ?? self.defaultOutputDevice
         
-        if let first = allStats.first, let supported = defaultDevice?.nominalSampleRates {
+        guard let device = defaultDevice else { return }
+        
+        if let first = allStats.first, let supported = device.nominalSampleRates {
             let sampleRate = Float64(first.sampleRate)
             let bitDepth = Int32(first.bitDepth)
             
@@ -159,13 +168,18 @@ class OutputDevices: ObservableObject {
                 return
             }
             
-            if sampleRate == 48000 {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            // Special handling for 48000 Hz sample rate:
+            // This is the standard digital audio sample rate, and detection may initially report this
+            // as a fallback before the actual track sample rate is available in the logs.
+            // We retry once to get the true sample rate. Only do this on first call to avoid infinite loops.
+            if sampleRate == kStandardSampleRate && !recursion {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                     self.switchLatestSampleRate(recursion: true)
                 }
+                return
             }
             
-            let formats = self.getFormats(bestStat: first, device: defaultDevice!)!
+            guard let formats = self.getFormats(bestStat: first, device: device) else { return }
             
             // https://stackoverflow.com/a/65060134
             let nearest = supported.min(by: {
@@ -184,46 +198,28 @@ class OutputDevices: ObservableObject {
             
             if let suitableFormat = nearestFormat.first {
                 if enableBitDepthDetection {
-                    self.setFormats(device: defaultDevice, format: suitableFormat)
+                    self.setFormats(device: device, format: suitableFormat)
                 }
                 else if suitableFormat.mSampleRate != previousSampleRate { // bit depth disabled
-                    defaultDevice?.setNominalSampleRate(suitableFormat.mSampleRate)
+                    device.setNominalSampleRate(suitableFormat.mSampleRate)
                 }
                 self.updateSampleRate(suitableFormat.mSampleRate)
                 if let currentTrack = currentTrack {
                     self.trackAndSample[currentTrack] = suitableFormat.mSampleRate
                 }
             }
-
-//            if let nearest = nearest {
-//                let nearestSampleRate = nearest.element
-//                if nearestSampleRate != previousSampleRate {
-//                    defaultDevice?.setNominalSampleRate(nearestSampleRate)
-//                    self.updateSampleRate(nearestSampleRate)
-//                    if let currentTrack = currentTrack {
-//                        self.trackAndSample[currentTrack] = nearestSampleRate
-//                    }
-//                }
-//            }
         }
         else if !recursion {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            // Reduced delay from 1s to 0.8s for faster retry
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                 self.switchLatestSampleRate(recursion: true)
             }
         }
         else {
-//                print("cache \(self.trackAndSample)")
             if self.currentTrack == self.previousTrack {
                 print("same track, ignore cache")
                 return
             }
-//            if let currentTrack = currentTrack, let cachedSampleRate = trackAndSample[currentTrack] {
-//                print("using cached data")
-//                if cachedSampleRate != previousSampleRate {
-//                    defaultDevice?.setNominalSampleRate(cachedSampleRate)
-//                    self.updateSampleRate(cachedSampleRate)
-//                }
-//            }
         }
 
     }
@@ -244,6 +240,9 @@ class OutputDevices: ObservableObject {
     }
     
     func updateSampleRate(_ sampleRate: Float64) {
+        // Early return if sample rate hasn't changed to avoid unnecessary UI updates
+        guard sampleRate != self.previousSampleRate else { return }
+        
         self.previousSampleRate = sampleRate
         DispatchQueue.main.async {
             let readableSampleRate = sampleRate / 1000

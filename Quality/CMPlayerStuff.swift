@@ -25,12 +25,10 @@ class CMPlayerParser {
         
         var stats = [CMPlayerStats]()
         
-        for entry in entries {
-            // ignore useless log messages for faster switching
-            if !entry.message.contains("audioCapabilities:") {
-                continue
-            }
-            
+        // Pre-filter entries to only those containing "audioCapabilities:" for faster iteration
+        let relevantEntries = entries.filter { $0.message.contains("audioCapabilities:") }
+        
+        for entry in relevantEntries {
             let date = entry.date
             let rawMessage = entry.message
             
@@ -76,7 +74,14 @@ class CMPlayerParser {
         
         var stats = [CMPlayerStats]()
         
-        for entry in entries {
+        // Pre-filter for relevant messages to avoid repeated checks
+        // Check more specific decoder name first for better short-circuit performance
+        let relevantEntries = entries.filter { message in
+            let msg = message.message
+            return msg.contains("ACAppleLosslessDecoder") && msg.contains("Input format: ")
+        }
+        
+        for entry in relevantEntries {
             let date = entry.date
             let rawMessage = entry.message
             
@@ -85,16 +90,14 @@ class CMPlayerParser {
                 bitDepth = nil
             }
             
-            if rawMessage.contains("ACAppleLosslessDecoder") && rawMessage.contains("Input format: ") {
-                if let subSampleRate = rawMessage.firstSubstring(between: "ch, ", and: " Hz") {
-                    let strSampleRate = String(subSampleRate)
-                    sampleRate = Double(strSampleRate)
-                }
-                
-                if let subBitDepth = rawMessage.firstSubstring(between: "from ", and: "-bit source") {
-                    let strBitDepth = String(subBitDepth)
-                    bitDepth = Int(strBitDepth)
-                }
+            if let subSampleRate = rawMessage.firstSubstring(between: "ch, ", and: " Hz") {
+                let strSampleRate = String(subSampleRate)
+                sampleRate = Double(strSampleRate)
+            }
+            
+            if let subBitDepth = rawMessage.firstSubstring(between: "from ", and: "-bit source") {
+                let strBitDepth = String(subBitDepth)
+                bitDepth = Int(strBitDepth)
             }
             
             if let sr = sampleRate,
@@ -121,7 +124,10 @@ class CMPlayerParser {
         
         var stats = [CMPlayerStats]()
         
-        for entry in entries {
+        // Pre-filter entries to only those containing "Creating AudioQueue"
+        let relevantEntries = entries.filter { $0.message.contains("Creating AudioQueue") }
+        
+        for entry in relevantEntries {
             let date = entry.date
             let rawMessage = entry.message
             
@@ -129,11 +135,9 @@ class CMPlayerParser {
                 sampleRate = nil
             }
             
-            if rawMessage.contains("Creating AudioQueue") {
-                if let subSampleRate = rawMessage.firstSubstring(between: "sampleRate:", and: .end) {
-                    let strSampleRate = String(subSampleRate)
-                    sampleRate = Double(strSampleRate)
-                }
+            if let subSampleRate = rawMessage.firstSubstring(between: "sampleRate:", and: .end) {
+                let strSampleRate = String(subSampleRate)
+                sampleRate = Double(strSampleRate)
             }
             
             if let sr = sampleRate {
